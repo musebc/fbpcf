@@ -11,7 +11,7 @@ env:
 
 jobs:
   ubuntu:
-    runs-on: [self-hosted, e2e_test_runner]
+    runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v2
