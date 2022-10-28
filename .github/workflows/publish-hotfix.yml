@@ -24,6 +24,9 @@ jobs:
       version_tag: ${{ steps.create_version.outputs.version_tag }}
       docker_version_tag: ${{ steps.create_version.outputs.docker_version_tag }}
     steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: Create version
         id: create_version
         run: |
