@@ -41,14 +41,13 @@ jobs:
     - name: Sanity check fbpcf library (v2)
       timeout-minutes: 3
       run: |
-        ls -la
         ./run-sanity_check.sh -u -v 2
       working-directory: fbpcf/tests/github/
 
     - name: Run Edit Distance E2E Test
       timeout-minutes: 10
       run: |
-       ./run-edit_distance_validation.sh -u
+        ./run-edit_distance_validation.sh -u
       working-directory: fbpcf/tests/github/
 
     - name: Log into registry ${{ env.REGISTRY }}
