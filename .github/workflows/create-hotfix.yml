@@ -11,10 +11,6 @@ on:
         description: "A comma separated list of commits to patch into the base revision"
         required: true
         type: string
-      tracker_hash:
-        description: "[Internal usage] Used for tracking workflow job status within Meta infra"
-        required: false
-        type: string
 
 env:
   BRANCH_NAME: hotfix/release-${{ inputs.base_tag }}
