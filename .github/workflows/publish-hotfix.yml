@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Get Base Tag
         id: get_base_tag
-        run: echo "base_tag=$(echo ${{ github.ref_name }} | tr 'hotfix/release-' '')" >> $GITHUB_OUTPUT
+        run: echo "base_tag=$(echo ${{ github.ref_name }} | tr -d 'hotfix/release-')" >> $GITHUB_OUTPUT
 
   create_version:
     name: Create new Hotfix Version
