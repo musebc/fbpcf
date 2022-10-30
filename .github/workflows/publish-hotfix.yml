@@ -41,6 +41,6 @@ jobs:
     needs: create_version
     uses: ./.github/workflows/build-and-publish-fbpcf-image.yml
     with:
-      branch: ${{ github.ref }}
+      branch: ${{ github.ref_name }}
       version_tag: ${{ needs.create_version.outputs.version_tag }}
       docker_tags: ${{ needs.create_version.outputs.docker_version_tag }}
