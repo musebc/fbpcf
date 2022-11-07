@@ -27,7 +27,7 @@ jobs:
   build_and_publish_fbpcf_image:
     if: startsWith(inputs.branch, 'hotfix/release-') || inputs.branch == 'main'
     name: Build and Publish Hotfix Image
-    runs-on: [self-hosted, e2e_test_runner]
+    runs-on: ubuntu-20.04
     permissions:
       contents: write
       packages: write
