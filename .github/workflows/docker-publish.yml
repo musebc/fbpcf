@@ -66,7 +66,7 @@ jobs:
           docker push --all-tags ${{ env.REGISTRY_IMAGE_NAME }}
 
   build_data_processing_image:
-    name: Build Image
+    name: Build Data Processing Image
     runs-on: ubuntu-20.04
     needs: build_and_test
 
@@ -74,7 +74,8 @@ jobs:
       - name: Get FBPCS Ref
         id: get_fbpcs_ref
         run: |
-          echo fbpcs_ref=$(curl --header 'content-type: application/json' "https://api.github.com/repos/facebookresearch/fbpcs/actions/workflows/12965519/runs?per_page=1&status=success" | jq \".workflow_runs[0] .head_sha" | tr -d '"') >> $GITHUB_OUTPUT
+          FBPCF_REF="$(curl --header 'content-type: application/json' \"https://api.github.com/repos/facebookresearch/fbpcs/actions/workflows/12965519/runs?per_page=1&status=success\" | jq \".workflow_runs[0] .head_sha\" | tr -d '\"')"
+          echo fbpcs_ref="$FBPCF_REF" >> $GITHUB_OUTPUT
 
       - uses: actions/checkout@v3
         with:
@@ -124,7 +125,7 @@ jobs:
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
   build_emp_games_image:
-    name: Build Image
+    name: Build EMP Games Image
     runs-on: ubuntu-20.04
     needs: build_and_test
 
@@ -132,7 +133,8 @@ jobs:
       - name: Get FBPCS Ref
         id: get_fbpcs_ref
         run: |
-          echo fbpcs_ref=$(curl --header 'content-type: application/json' "https://api.github.com/repos/facebookresearch/fbpcs/actions/workflows/12965519/runs?per_page=1&status=success" | jq \".workflow_runs[0] .head_sha" | tr -d '"') >> $GITHUB_OUTPUT
+          FBPCF_REF="$(curl --header 'content-type: application/json' \"https://api.github.com/repos/facebookresearch/fbpcs/actions/workflows/12965519/runs?per_page=1&status=success\" | jq \".workflow_runs[0] .head_sha\" | tr -d '\"')"
+          echo fbpcs_ref="$FBPCF_REF" >> $GITHUB_OUTPUT
 
       - uses: actions/checkout@v3
         with:
