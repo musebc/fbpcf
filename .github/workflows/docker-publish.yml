@@ -18,7 +18,7 @@ env:
 
 jobs:
   test_and_push:
-    runs-on: [self-hosted, e2e_test_runner]
+    runs-on: ubuntu-20.04
     permissions:
       contents: write
       packages: write
@@ -118,12 +118,11 @@ jobs:
         docker push --all-tags ${{ env.REGISTRY_IMAGE_NAME }}
 
     - name: Create release
-      uses: "actions/create-release@v1"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: "ncipollo/release-action@v1"
       with:
-        release_name: ${{ steps.create_version.outputs.version_tag }}
-        tag_name: ${{ steps.create_version.outputs.version_tag }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+        name: ${{ steps.create_version.outputs.version_tag }}
+        tag: ${{ steps.create_version.outputs.version_tag }}
 
     - name: Cleanup
       run: |
