@@ -108,7 +108,7 @@ jobs:
           build-args: |
             tag=latest
             os_release=20.04
-            fbpcf_image=ghcr.io/facebookresearch/fbpcf/ubuntu:${{ github.sha }}
+            fbpcf_image=ghcr.io/musebc/fbpcf/ubuntu:${{ github.sha }}
           push: false
           pull: true
           cache-from: type=local,src=/tmp/.buildx-cache
@@ -167,7 +167,7 @@ jobs:
           build-args: |
             tag=latest
             os_release=20.04
-            fbpcf_image=ghcr.io/facebookresearch/fbpcf/ubuntu:${{ github.sha }}
+            fbpcf_image=ghcr.io/musebc/fbpcf/ubuntu:${{ github.sha }}
           push: false
           pull: true
           cache-from: type=local,src=/tmp/.buildx-cache
