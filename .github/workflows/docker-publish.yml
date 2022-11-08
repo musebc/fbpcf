@@ -17,118 +17,235 @@ env:
   COORDINATOR_IMAGE_DEV: ghcr.io/facebookresearch/fbpcs/coordinator:dev
 
 jobs:
-  test_and_push:
+  build_and_test:
     runs-on: ubuntu-20.04
     permissions:
       contents: write
       packages: write
 
     steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
-    - name: Build fbpcf docker image
-      run: |
-        ./build-docker.sh -u
+      - name: Build fbpcf docker image
+        run: |
+          ./build-docker.sh -u
 
-    - name: Sanity check fbpcf library (v1)
-      timeout-minutes: 3
-      run: |
-        ./run-sanity_check.sh -u -v 1
-      working-directory: fbpcf/tests/github/
+      - name: Sanity check fbpcf library (v1)
+        timeout-minutes: 3
+        run: |
+          ./run-sanity_check.sh -u -v 1
+        working-directory: fbpcf/tests/github/
 
-    - name: Sanity check fbpcf library (v2)
-      timeout-minutes: 3
-      run: |
-        ./run-sanity_check.sh -u -v 2
-      working-directory: fbpcf/tests/github/
+      - name: Sanity check fbpcf library (v2)
+        timeout-minutes: 3
+        run: |
+          ./run-sanity_check.sh -u -v 2
+        working-directory: fbpcf/tests/github/
 
-    - name: Run Edit Distance E2E Test
-      timeout-minutes: 10
-      run: |
-        echo Success
-      working-directory: fbpcf/tests/github/
+      - name: Run Edit Distance E2E Test
+        timeout-minutes: 10
+        run: |
+          echo Success
+        working-directory: fbpcf/tests/github/
 
-    - name: Log into registry ${{ env.REGISTRY }}
-      uses: docker/login-action@v1
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Clone latest stable fbpcs
-      run: |
-        git clone https://github.com/facebookresearch/fbpcs
-        cd fbpcs
-        git reset --hard $(curl \
-        --header 'content-type: application/json' \
-        "https://api.github.com/repos/facebookresearch/fbpcs/actions/workflows/12965519/runs?per_page=1&status=success" | jq \
-        ".workflow_runs[0] .head_sha" | tr -d '"')
+      - name: Tag fbpcf docker image
+        run: |
+          docker tag ${{ env.LOCAL_IMAGE_NAME }} ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }}
 
-    - name: Build fbpcs image (this uses the locally built fbpcf image as a dependency)
-      run: |
-        cd fbpcs
-        ./build-docker.sh onedocker -t ${{ env.VERSION_TAG }}
+      - name: Push fbpcf image to registry
+        run: |
+          docker push --all-tags ${{ env.REGISTRY_IMAGE_NAME }}
 
-    - name: Tag fbpcf docker image
-      run: |
-        docker tag ${{ env.LOCAL_IMAGE_NAME }} ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }}
+  build_data_processing_image:
+    name: Build Image
+    runs-on: ubuntu-20.04
+    needs: build_and_test
 
-    - name: Push fbpcf image to registry
-      run: |
-        docker push --all-tags ${{ env.REGISTRY_IMAGE_NAME }}
+    steps:
+      - name: Get FBPCS Ref
+        id: get_fbpcs_ref
+        run: |
+          echo fbpcs_ref=$(curl --header 'content-type: application/json' "https://api.github.com/repos/facebookresearch/fbpcs/actions/workflows/12965519/runs?per_page=1&status=success" | jq \".workflow_runs[0] .head_sha" | tr -d '"') >> $GITHUB_OUTPUT
 
-    - name: Create version string
-      id: create_version
-      uses: paulhatch/semantic-version@v4.0.2
-      with:
-        tag_prefix: "v"
-        major_pattern: "((MAJOR))"
-        minor_pattern: "((MINOR))"
-        format: "${major}.${minor}.${patch}-pre${increment}"
+      - uses: actions/checkout@v3
+        with:
+          repository: "https://github.com/facebookresearch/fbpcs"
+          ref: ${{ steps.get_fbpcs_ref.outputs.fbpcs_ref }}
 
-    - name: Add tag to commit
-      id: tag_version
-      uses: mathieudutour/github-tag-action@v6.0
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        custom_tag: ${{ steps.create_version.outputs.version_tag }}
-        tag_prefix: ""
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
-    - name: Set output
-      id: vars
-      run: echo ::set-output name=ref::${GITHUB_REF##*/}
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-data-processing-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-data-processing
 
-    - name: Pull image for this commit from registry
-      run: |
-        docker pull ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }}
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Tag Docker image
-      run: |
-        docker tag ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_IMAGE_NAME }}:${{ steps.vars.outputs.ref }}
-        docker tag ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_IMAGE_NAME }}:${{ steps.create_version.outputs.major }}
-        docker tag ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_IMAGE_NAME }}:${{ steps.create_version.outputs.major }}.${{ steps.create_version.outputs.minor }}
-        docker tag ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_IMAGE_NAME }}:${{ steps.create_version.outputs.major }}.${{ steps.create_version.outputs.minor }}.${{ steps.create_version.outputs.patch }}
-        docker tag ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_IMAGE_NAME }}:${{ steps.create_version.outputs.version_tag }}
-        docker tag ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_IMAGE_NAME }}:latest
+      - name: Build Image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: docker/data_processing/Dockerfile.ubuntu
+          build-args: |
+            tag=latest
+            os_release=20.04
+            fbpcf_image=ghcr.io/facebookresearch/fbpcf/ubuntu:${{ github.sha }}
+          push: false
+          pull: true
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
 
-    - name: Push Docker image
-      run: |
-        docker push --all-tags ${{ env.REGISTRY_IMAGE_NAME }}
+      # This ugly bit is necessary or else our cache will grow forever
+      # until it hits GitHub's limit of 5GB.
+      # Temp fix: T135482742
+      # https://github.com/docker/build-push-action/issues/252
+      # https://github.com/moby/buildkit/issues/1896
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
-    - name: Create release
-      uses: "ncipollo/release-action@v1"
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        name: ${{ steps.create_version.outputs.version_tag }}
-        tag: ${{ steps.create_version.outputs.version_tag }}
+  build_emp_games_image:
+    name: Build Image
+    runs-on: ubuntu-20.04
+    needs: build_and_test
 
-    - name: Cleanup
-      run: |
-        # remove all images
-        docker image prune -af
+    steps:
+      - name: Get FBPCS Ref
+        id: get_fbpcs_ref
+        run: |
+          echo fbpcs_ref=$(curl --header 'content-type: application/json' "https://api.github.com/repos/facebookresearch/fbpcs/actions/workflows/12965519/runs?per_page=1&status=success" | jq \".workflow_runs[0] .head_sha" | tr -d '"') >> $GITHUB_OUTPUT
 
-        # stop and remove all containers
-        docker kill $(docker ps -q) || echo "No running containers to stop."
-        docker rm $(docker ps -a -q) || echo "No containers to delete."
+      - uses: actions/checkout@v3
+        with:
+          repository: "https://github.com/facebookresearch/fbpcs"
+          ref: ${{ steps.get_fbpcs_ref.outputs.fbpcs_ref }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-emp-games-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-emp-games
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: docker/emp_games/Dockerfile.ubuntu
+          build-args: |
+            tag=latest
+            os_release=20.04
+            fbpcf_image=ghcr.io/facebookresearch/fbpcf/ubuntu:${{ github.sha }}
+          push: false
+          pull: true
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+
+      # This ugly bit is necessary or else our cache will grow forever
+      # until it hits GitHub's limit of 5GB.
+      # Temp fix: T135482742
+      # https://github.com/docker/build-push-action/issues/252
+      # https://github.com/moby/buildkit/issues/1896
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  publish_fbpcf_image:
+    name: Publish FBPCF Image
+    runs-on: ubuntu-20.04
+    needs: [build_data_processing_image, build_emp_games_image]
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Create version string
+        id: create_version
+        uses: paulhatch/semantic-version@v4.0.2
+        with:
+          tag_prefix: "v"
+          major_pattern: "((MAJOR))"
+          minor_pattern: "((MINOR))"
+          format: "${major}.${minor}.${patch}-pre${increment}"
+
+      - name: Add tag to commit
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          custom_tag: ${{ steps.create_version.outputs.version_tag }}
+          tag_prefix: ""
+
+      - name: Set output
+        id: vars
+        run: echo ::set-output name=ref::${GITHUB_REF##*/}
+
+      - name: Pull image for this commit from registry
+        run: |
+          docker pull ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Tag Docker image
+        run: |
+          docker tag ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_IMAGE_NAME }}:${{ steps.vars.outputs.ref }}
+          docker tag ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_IMAGE_NAME }}:${{ steps.create_version.outputs.major }}
+          docker tag ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_IMAGE_NAME }}:${{ steps.create_version.outputs.major }}.${{ steps.create_version.outputs.minor }}
+          docker tag ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_IMAGE_NAME }}:${{ steps.create_version.outputs.major }}.${{ steps.create_version.outputs.minor }}.${{ steps.create_version.outputs.patch }}
+          docker tag ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_IMAGE_NAME }}:${{ steps.create_version.outputs.version_tag }}
+          docker tag ${{ env.REGISTRY_IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_IMAGE_NAME }}:latest
+
+      - name: Push Docker image
+        run: |
+          docker push --all-tags ${{ env.REGISTRY_IMAGE_NAME }}
+
+      - name: Create release
+        uses: "actions/create-release@v1"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          release_name: ${{ steps.create_version.outputs.version_tag }}
+          tag_name: ${{ steps.create_version.outputs.version_tag }}
+          body: ${{ github.event.head_commit.message }}
+
+      - name: Cleanup
+        run: |
+          # remove all images
+          docker image prune -af
+
+          # stop and remove all containers
+          docker kill $(docker ps -q) || echo "No running containers to stop."
+          docker rm $(docker ps -a -q) || echo "No containers to delete."
